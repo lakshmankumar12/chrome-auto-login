@@ -82,10 +82,20 @@ function performStep(config, step) {
 
   function fillField(el, value) {
     el.focus();
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-    if (setter) { setter.call(el, value); } else { el.value = value; }
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
+    const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+    // Clear first
+    if (nativeSetter) { nativeSetter.call(el, ''); } else { el.value = ''; }
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'deleteContentBackward' }));
+    // Type each character to fire real keyboard events
+    for (const char of value) {
+      const next = el.value + char;
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true, cancelable: true, composed: true }));
+      el.dispatchEvent(new KeyboardEvent('keypress', { key: char, charCode: char.charCodeAt(0), keyCode: char.charCodeAt(0), which: char.charCodeAt(0), bubbles: true, cancelable: true, composed: true }));
+      if (nativeSetter) { nativeSetter.call(el, next); } else { el.value = next; }
+      el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, composed: true, inputType: 'insertText', data: char }));
+      el.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true, cancelable: true, composed: true }));
+    }
+    el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
   }
 
   function findInput(selectors) {
@@ -238,14 +248,26 @@ function performStep(config, step) {
           ? [config.usernameSelector]
           : ['input[type="email"]', 'input[name="email"]', 'input[name="username"]',
              'input[id*="email"]', 'input[id*="user"]',
-             'input[autocomplete="email"]', 'input[autocomplete="username"]'];
+             'input[autocomplete="email"]', 'input[autocomplete="username"]',
+             'input[type="text"]'];
         let field = findInput(emailSelectors);
         if (!field) field = await waitForElement(emailSelectors[0]);
         fillField(field, config.username);
         log('Filled email');
         await new Promise(r => setTimeout(r, 300));
+        // If a password field is also visible on this page, fill it too
+        const passSelectors = config.passwordSelector
+          ? [config.passwordSelector]
+          : ['input[type="password"]', 'input[name="password"]',
+             'input[id*="pass"]', 'input[autocomplete="current-password"]'];
+        const passField = findInput(passSelectors);
+        if (passField) {
+          fillField(passField, config.password);
+          log('Filled password (found alongside email field)');
+          await new Promise(r => setTimeout(r, 300));
+        }
         const btn = findSubmitButton();
-        if (btn) { btn.click(); log('Submitted email form'); }
+        if (btn) { btn.click(); log('Submitted form'); }
 
       } else if (step.action === 'fillEmailPassword') {
         const emailSelectors = config.usernameSelector
@@ -424,20 +446,23 @@ function performLogin(config) {
     });
   }
 
-  // ── Utility: fill a field and fire React/Vue-compatible events ────────────
+  // ── Utility: fill a field by mimicking real character-by-character keyboard input ──
   function fillField(el, value) {
     el.focus();
-    // Native input value setter (works with React controlled inputs)
-    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype, 'value'
-    )?.set;
-    if (nativeInputValueSetter) {
-      nativeInputValueSetter.call(el, value);
-    } else {
-      el.value = value;
+    const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+    // Clear first
+    if (nativeSetter) { nativeSetter.call(el, ''); } else { el.value = ''; }
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'deleteContentBackward' }));
+    // Type each character to fire real keyboard events
+    for (const char of value) {
+      const next = el.value + char;
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true, cancelable: true, composed: true }));
+      el.dispatchEvent(new KeyboardEvent('keypress', { key: char, charCode: char.charCodeAt(0), keyCode: char.charCodeAt(0), which: char.charCodeAt(0), bubbles: true, cancelable: true, composed: true }));
+      if (nativeSetter) { nativeSetter.call(el, next); } else { el.value = next; }
+      el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, composed: true, inputType: 'insertText', data: char }));
+      el.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true, cancelable: true, composed: true }));
     }
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
   }
 
   // ── Utility: find input by a list of selectors, first visible match wins ──

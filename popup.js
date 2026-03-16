@@ -64,7 +64,10 @@ function matchesDomain(pattern, hostname) {
 function findMatchingConfigKey(configs, domain) {
   if (configs[domain]) return domain;
   for (const key of Object.keys(configs)) {
-    if (key.includes('*') && matchesDomain(key, domain)) return key;
+    const parts = key.split('|').map(p => p.trim()).filter(Boolean);
+    if (parts.some(p => p === domain || (p.includes('*') && matchesDomain(p, domain)))) {
+      return key;
+    }
   }
   return null;
 }
