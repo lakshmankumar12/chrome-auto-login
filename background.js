@@ -220,7 +220,6 @@ function performStep(config, step) {
             if (config.totpSecret) {
               const _tf = findInput(_totpSelectors);
               const _code = await genTOTP(config.totpSecret);
-              fillField(_tf, _code.slice(0, 5)); await new Promise(r => setTimeout(r, 1000));
               fillField(_tf, _code); log(`Filled OTP: ${_code}`);
               await new Promise(r => setTimeout(r, 300));
               const _btn = findSubmitButton(); if (_btn) { _btn.click(); log('Submitted OTP form'); }
@@ -327,11 +326,8 @@ function performStep(config, step) {
         }
         if (totpField) {
           const code = await genTOTP(config.totpSecret);
-          fillField(totpField, code.slice(0, 5));
-          log(`Filled OTP (5 of 6): ${code.slice(0, 5)}`);
-          await new Promise(r => setTimeout(r, 1000));
           fillField(totpField, code);
-          log(`Filled OTP (6th digit): ${code}`);
+          log(`Filled OTP: ${code}`);
           await new Promise(r => setTimeout(r, 300));
           const btn = findSubmitButton();
           if (btn) { btn.click(); log('Submitted OTP form'); }
@@ -389,11 +385,8 @@ function performStep(config, step) {
           if (!config.totpSecret) { log('No TOTP secret configured, skipping'); return; }
           const totpField = findInput(totpSelectors);
           const code = await genTOTP(config.totpSecret);
-          fillField(totpField, code.slice(0, 5));
-          log(`Filled OTP (5 of 6): ${code.slice(0, 5)}`);
-          await new Promise(r => setTimeout(r, 1000));
           fillField(totpField, code);
-          log(`Filled OTP (6th digit): ${code}`);
+          log(`Filled OTP: ${code}`);
           await new Promise(r => setTimeout(r, 300));
           const btn = findSubmitButton();
           if (btn) { btn.click(); log('Submitted OTP form'); }
@@ -647,11 +640,8 @@ function performLogin(config) {
 
         if (totpField) {
           const code = await genTOTP(config.totpSecret);
-          fillField(totpField, code.slice(0, 5));
-          log(`Filled TOTP (5 of 6): ${code.slice(0, 5)}`);
-          await new Promise(r => setTimeout(r, 1000));
           fillField(totpField, code);
-          log(`Filled TOTP (6th digit): ${code}`);
+          log(`Filled TOTP: ${code}`);
           await new Promise(r => setTimeout(r, 300));
 
           const totpSubmit = findSubmitButton();

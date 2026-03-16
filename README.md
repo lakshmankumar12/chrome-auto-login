@@ -104,5 +104,4 @@ The **Sites** tab lists all saved configs. Click the trash icon to delete a conf
 ## Notes
 
 - Input fields are filled by simulating real keyboard events (keydown/keypress/input/keyup per character) to ensure sites that watch for keyboard activity enable their submit buttons correctly.
-- OTP fields are filled in two steps: 5 digits first, then the 6th after a 1-second pause — for sites that only enable submit after the final character.
 - No data leaves your browser. Everything is stored in `chrome.storage.local`.
