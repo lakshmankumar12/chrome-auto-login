@@ -40,7 +40,11 @@ function totpSecondsRemaining(period = 30) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function extractDomain(url) {
-  try { return new URL(url).hostname; } catch { return null; }
+  try {
+    const u = new URL(url);
+    // Include port in key when non-standard (e.g. localhost:32766)
+    return u.host; // "localhost:32766" or "example.com" (no port for 80/443)
+  } catch { return null; }
 }
 
 /**
