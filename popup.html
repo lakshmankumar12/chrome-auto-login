@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AutoLogin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:        #0d0f14;
+      --surface:   #141720;
+      --border:    #1e2330;
+      --border2:   #252b3b;
+      --accent:    #00e5ff;
+      --accent-dim:#007a8a;
+      --green:     #00ff88;
+      --red:       #ff4466;
+      --yellow:    #ffd700;
+      --text:      #c8d0e0;
+      --text-dim:  #5a6380;
+      --text-muted:#3a4060;
+      --label:     #7b8ab0;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'IBM Plex Sans', sans-serif;
+      --radius:    6px;
+      --w: 360px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: var(--w);
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 13px;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo {
+      width: 22px; height: 22px;
+      background: var(--accent);
+      border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .logo svg { width: 14px; height: 14px; }
+    .app-name {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.05em;
+    }
+    .version {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* ── Tab strip ── */
+    .tab-strip {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .tab {
+      flex: 1;
+      padding: 8px 0;
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-dim);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      letter-spacing: 0.04em;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* ── Panels ── */
+    .panel { display: none; padding: 14px 16px; }
+    .panel.active { display: block; }
+
+    /* ── Current tab info ── */
+    .current-tab {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .tab-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .tab-dot.enabled { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .tab-url {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+    }
+
+    /* ── Form elements ── */
+    .field-group {
+      margin-bottom: 12px;
+    }
+    label {
+      display: block;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--label);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    .input-wrap {
+      position: relative;
+    }
+    input[type="text"],
+    input[type="password"],
+    input[type="url"],
+    textarea {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 8px 10px;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    input:focus, textarea:focus {
+      border-color: var(--accent-dim);
+      box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.08);
+    }
+    input::placeholder, textarea::placeholder {
+      color: var(--text-muted);
+    }
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+      font-size: 11px;
+    }
+
+    /* Password eye toggle */
+    .eye-btn {
+      position: absolute;
+      right: 8px; top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-dim);
+      padding: 2px;
+      display: flex;
+      align-items: center;
+    }
+    .eye-btn:hover { color: var(--text); }
+    input.has-toggle { padding-right: 32px; }
+
+    /* ── TOTP preview ── */
+    .totp-preview {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 12px;
+      margin-top: 8px;
+    }
+    .totp-code {
+      font-family: var(--mono);
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: var(--green);
+    }
+    .totp-timer {
+      margin-left: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 3px;
+    }
+    .timer-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+    .timer-bar-wrap {
+      width: 60px;
+      height: 4px;
+      background: var(--border2);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .timer-bar {
+      height: 100%;
+      background: var(--green);
+      border-radius: 2px;
+      transition: width 1s linear, background 0.3s;
+    }
+    .timer-bar.warn { background: var(--yellow); }
+    .timer-bar.danger { background: var(--red); }
+
+    /* ── Toggle switch ── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+    .toggle-label {
+      font-size: 12px;
+      color: var(--text);
+    }
+    .toggle-sub {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 1px;
+    }
+    .switch {
+      position: relative;
+      width: 36px; height: 20px;
+      flex-shrink: 0;
+    }
+    .switch input { display: none; }
+    .slider {
+      position: absolute;
+      inset: 0;
+      background: var(--border2);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .slider::before {
+      content: '';
+      position: absolute;
+      left: 3px; top: 3px;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      transition: transform 0.2s, background 0.2s;
+    }
+    .switch input:checked + .slider { background: var(--accent-dim); }
+    .switch input:checked + .slider::before {
+      transform: translateX(16px);
+      background: var(--accent);
+    }
+
+    /* ── Buttons ── */
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .btn {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      border-radius: var(--radius);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      text-transform: uppercase;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+    }
+    .btn-primary:hover:not(:disabled) { opacity: 0.85; }
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border2);
+    }
+    .btn-secondary:hover:not(:disabled) { border-color: var(--accent-dim); color: var(--accent); }
+    .btn-danger {
+      background: transparent;
+      color: var(--red);
+      border: 1px solid rgba(255,68,102,0.3);
+    }
+    .btn-danger:hover:not(:disabled) { background: rgba(255,68,102,0.08); }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 14px; left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      padding: 7px 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text);
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 999;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    #toast.success { border-color: var(--green); color: var(--green); }
+    #toast.error   { border-color: var(--red);   color: var(--red); }
+
+    /* ── Saved sites list ── */
+    .sites-list { display: flex; flex-direction: column; gap: 6px; }
+    .site-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 10px;
+    }
+    .site-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--text-muted); flex-shrink: 0;
+    }
+    .site-dot.on { background: var(--green); box-shadow: 0 0 5px var(--green); }
+    .site-info { flex: 1; min-width: 0; }
+    .site-domain {
+      font-family: var(--mono); font-size: 11px;
+      color: var(--text); white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .site-user { font-size: 10px; color: var(--text-dim); margin-top: 1px; }
+    .site-actions { display: flex; gap: 4px; }
+    .icon-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-dim); padding: 3px;
+      border-radius: 3px; transition: color 0.15s;
+    }
+    .icon-btn:hover { color: var(--accent); }
+    .icon-btn.del:hover { color: var(--red); }
+    .empty-state {
+      text-align: center; padding: 24px 0;
+      font-size: 12px; color: var(--text-muted);
+      font-family: var(--mono);
+    }
+
+    /* ── Divider ── */
+    .divider {
+      height: 1px; background: var(--border);
+      margin: 12px 0;
+    }
+
+    /* ── Section label ── */
+    .section-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    /* Advanced collapsed */
+    .advanced-toggle {
+      display: flex; align-items: center; gap: 6px;
+      cursor: pointer; user-select: none;
+      font-family: var(--mono); font-size: 10px;
+      color: var(--text-dim); letter-spacing: 0.05em;
+      text-transform: uppercase; margin-bottom: 8px;
+    }
+    .advanced-toggle:hover { color: var(--text); }
+    .chevron { transition: transform 0.2s; }
+    .chevron.open { transform: rotate(90deg); }
+    .advanced-body { display: none; }
+    .advanced-body.open { display: block; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <div class="logo">
+      <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1" y="4" width="12" height="8" rx="1.5" fill="#000" stroke="#000"/>
+        <path d="M4 4V3a3 3 0 016 0v1" stroke="#000" stroke-width="1.8" stroke-linecap="round"/>
+        <circle cx="7" cy="8.5" r="1.2" fill="#00e5ff"/>
+      </svg>
+    </div>
+    <span class="app-name">AUTOLOGIN</span>
+  </div>
+  <span class="version">v1.0</span>
+</div>
+
+<!-- Tab strip -->
+<div class="tab-strip">
+  <div class="tab active" data-tab="config">CONFIG</div>
+  <div class="tab" data-tab="totp">TOTP</div>
+  <div class="tab" data-tab="sites">SITES</div>
+</div>
+
+<!-- ── Panel: Config ── -->
+<div class="panel active" id="panel-config">
+
+  <!-- Current tab info -->
+  <div class="current-tab">
+    <div class="tab-dot" id="status-dot"></div>
+    <span class="tab-url" id="current-url">Loading...</span>
+  </div>
+
+  <!-- Credentials -->
+  <div class="section-label">Credentials</div>
+
+  <div class="field-group">
+    <label>Username / Email</label>
+    <input type="text" id="username" placeholder="user@example.com" autocomplete="off" />
+  </div>
+
+  <div class="field-group">
+    <label>Password</label>
+    <div class="input-wrap">
+      <input type="password" id="password" placeholder="••••••••••••" class="has-toggle" autocomplete="off" />
+      <button class="eye-btn" id="toggle-pass" title="Show/hide">
+        <svg id="eye-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="field-group">
+    <label>TOTP Secret Key (Base32)</label>
+    <div class="input-wrap">
+      <input type="password" id="totp-secret" placeholder="JBSWY3DPEHPK3PXP" class="has-toggle" autocomplete="off" />
+      <button class="eye-btn" id="toggle-totp" title="Show/hide">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Auto-trigger -->
+  <div class="section-label">Auto-trigger</div>
+  <div class="field-group">
+    <label>Login URL patterns (comma-separated)</label>
+    <input type="text" id="login-patterns" placeholder="/login, /signin, /auth" />
+  </div>
+
+  <div class="toggle-row" style="margin-bottom:14px">
+    <div>
+      <div class="toggle-label">Enable auto-relogin</div>
+      <div class="toggle-sub">Trigger when URL matches patterns above</div>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="enabled-toggle" />
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <!-- Advanced -->
+  <div class="advanced-toggle" id="adv-toggle">
+    <svg class="chevron" id="adv-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
+      <path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Advanced selectors
+  </div>
+  <div class="advanced-body" id="adv-body">
+    <div class="field-group">
+      <label>Username field selector (CSS)</label>
+      <input type="text" id="username-sel" placeholder='input[name="username"]  (auto-detect if blank)' />
+    </div>
+    <div class="field-group">
+      <label>Password field selector (CSS)</label>
+      <input type="text" id="password-sel" placeholder='input[type="password"]  (auto-detect if blank)' />
+    </div>
+    <div class="field-group">
+      <label>TOTP field selector (CSS)</label>
+      <input type="text" id="totp-sel" placeholder='input[name="otp"]  (auto-detect if blank)' />
+    </div>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="btn-row">
+    <button class="btn btn-secondary" id="btn-clear">Clear</button>
+    <button class="btn btn-secondary" id="btn-save">Save</button>
+    <button class="btn btn-primary" id="btn-login-now">▶ Login Now</button>
+  </div>
+</div>
+
+<!-- ── Panel: TOTP ── -->
+<div class="panel" id="panel-totp">
+  <div class="section-label">Live TOTP Preview</div>
+  <p style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">
+    Enter a TOTP secret below (or uses the one saved for the current site).
+  </p>
+
+  <div class="field-group">
+    <label>TOTP Secret</label>
+    <div class="input-wrap">
+      <input type="password" id="totp-preview-secret" placeholder="Base32 secret key" class="has-toggle" />
+      <button class="eye-btn" id="toggle-totp-preview">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="totp-preview" id="totp-preview-box">
+    <div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:4px">CURRENT CODE</div>
+      <div class="totp-code" id="totp-live-code">------</div>
+    </div>
+    <div class="totp-timer">
+      <span class="timer-label" id="timer-secs">-- sec</span>
+      <div class="timer-bar-wrap">
+        <div class="timer-bar" id="timer-bar"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-row" style="margin-top:14px">
+    <button class="btn btn-secondary" id="btn-copy-totp">Copy Code</button>
+  </div>
+</div>
+
+<!-- ── Panel: Sites ── -->
+<div class="panel" id="panel-sites">
+  <div class="section-label">Saved Sites</div>
+  <div class="sites-list" id="sites-list">
+    <div class="empty-state">No sites configured yet.</div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script src="popup.js"></script>
+</body>
+</html>
