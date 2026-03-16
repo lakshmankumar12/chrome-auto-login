@@ -13,6 +13,57 @@ async function getAllConfigs() {
   return result.siteConfigs || {};
 }
 
+function extractHost(url) {
+  try { return new URL(url).host; } catch { return null; }
+}
+
+function matchesDomain(pattern, host) {
+  if (pattern === host) return true;
+  if (pattern.startsWith('*')) return host.endsWith(pattern.slice(1));
+  return false;
+}
+
+function findConfigForHost(configs, host) {
+  if (configs[host]) return configs[host];
+  for (const [key, cfg] of Object.entries(configs)) {
+    const parts = key.split('|').map(p => p.trim()).filter(Boolean);
+    if (parts.some(p => matchesDomain(p, host))) return cfg;
+  }
+  return null;
+}
+
+// ─── Keyboard shortcut ───────────────────────────────────────────────────────
+
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== 'trigger-login') return;
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.url || tab.url.startsWith('chrome://')) return;
+
+  const host = extractHost(tab.url);
+  if (!host) return;
+
+  const configs = await getAllConfigs();
+  const config = findConfigForHost(configs, host);
+  if (!config) {
+    console.log(`[AutoLogin] Shortcut: no config found for ${host}`);
+    return;
+  }
+
+  try {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['totp.js'] });
+    const step = config.loginSteps?.find(s => s.urlPattern && tab.url.includes(s.urlPattern));
+    if (step) {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: performStep, args: [config, step] });
+    } else {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: performLogin, args: [config] });
+    }
+    console.log(`[AutoLogin] Shortcut triggered login on ${host}`);
+  } catch (err) {
+    console.error('[AutoLogin] Shortcut login failed:', err);
+  }
+});
+
 // ─── Message handler ─────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
