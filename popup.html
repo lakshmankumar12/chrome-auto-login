@@ -116,6 +116,9 @@
       flex-shrink: 0;
     }
     .tab-dot.enabled { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .tab-dot.paused  { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+    .switch input:checked + .slider.slider-pause { background: #6b5a00; }
+    .switch input:checked + .slider.slider-pause::before { background: var(--yellow); }
     .tab-url {
       font-family: var(--mono);
       font-size: 11px;
@@ -357,7 +360,8 @@
       width: 7px; height: 7px; border-radius: 50%;
       background: var(--text-muted); flex-shrink: 0;
     }
-    .site-dot.on { background: var(--green); box-shadow: 0 0 5px var(--green); }
+    .site-dot.on     { background: var(--green);  box-shadow: 0 0 5px var(--green); }
+    .site-dot.paused { background: var(--yellow); box-shadow: 0 0 5px var(--yellow); }
     .site-info { flex: 1; min-width: 0; }
     .site-domain {
       font-family: var(--mono); font-size: 11px;
@@ -444,6 +448,12 @@
     <span class="tab-url" id="current-url">Loading...</span>
   </div>
 
+  <!-- Config key (editable, supports wildcards) -->
+  <div class="field-group" style="margin-bottom:12px">
+    <label>Config key <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)">— edit to use a wildcard, e.g. *.gxc.io</span></label>
+    <input type="text" id="config-key" placeholder="domain or *.example.com" autocomplete="off" />
+  </div>
+
   <!-- Credentials -->
   <div class="section-label">Credentials</div>
 
@@ -478,24 +488,6 @@
 
   <div class="divider"></div>
 
-  <!-- Auto-trigger -->
-  <div class="section-label">Auto-trigger</div>
-  <div class="field-group">
-    <label>Login URL patterns (comma-separated)</label>
-    <input type="text" id="login-patterns" placeholder="/login, /signin, /auth" />
-  </div>
-
-  <div class="toggle-row" style="margin-bottom:14px">
-    <div>
-      <div class="toggle-label">Enable auto-relogin</div>
-      <div class="toggle-sub">Trigger when URL matches patterns above</div>
-    </div>
-    <label class="switch">
-      <input type="checkbox" id="enabled-toggle" />
-      <span class="slider"></span>
-    </label>
-  </div>
-
   <!-- Advanced -->
   <div class="advanced-toggle" id="adv-toggle">
     <svg class="chevron" id="adv-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -504,6 +496,11 @@
     Advanced selectors
   </div>
   <div class="advanced-body" id="adv-body">
+    <div class="field-group">
+      <label>Multi-page login steps</label>
+      <textarea id="login-steps" style="min-height:90px;font-size:10px;line-height:1.6"
+        placeholder="One step per line:&#10;urlPattern | action | optionalParam&#10;&#10;Actions:&#10;  clickLink        (| link text)&#10;  fillEmail&#10;  fillEmailPassword&#10;  fillOTP&#10;  autoDetect       ← detects password vs OTP by page content&#10;&#10;Example (GXC portal):&#10;SLO?execution= | clickLink | here&#10;/login | fillEmail&#10;SSO?execution= | autoDetect"></textarea>
+    </div>
     <div class="field-group">
       <label>Username field selector (CSS)</label>
       <input type="text" id="username-sel" placeholder='input[name="username"]  (auto-detect if blank)' />

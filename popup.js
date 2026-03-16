@@ -43,21 +43,78 @@ function extractDomain(url) {
   try { return new URL(url).hostname; } catch { return null; }
 }
 
+/**
+ * Returns true if `pattern` matches `hostname`.
+ * Supports a leading wildcard: *.gxc.io matches portal-dev.gxc.io and idp-dev.gxc.io.
+ * Also supports mid-prefix wildcards like *dev.gxc.io.
+ */
+function matchesDomain(pattern, hostname) {
+  if (pattern === hostname) return true;
+  if (pattern.startsWith('*')) {
+    const suffix = pattern.slice(1); // e.g. '.gxc.io' or 'dev.gxc.io'
+    return hostname.endsWith(suffix);
+  }
+  return false;
+}
+
+/**
+ * Find the config key (exact or wildcard) that matches `domain`.
+ * Returns the key string, or null if none found.
+ */
+function findMatchingConfigKey(configs, domain) {
+  if (configs[domain]) return domain;
+  for (const key of Object.keys(configs)) {
+    if (key.includes('*') && matchesDomain(key, domain)) return key;
+  }
+  return null;
+}
+
 async function getAllConfigs() {
   const r = await chrome.storage.local.get('siteConfigs');
   return r.siteConfigs || {};
 }
 
-async function saveConfig(domain, config) {
+async function saveConfig(key, config) {
   const all = await getAllConfigs();
-  all[domain] = config;
+  all[key] = config;
   await chrome.storage.local.set({ siteConfigs: all });
 }
 
-async function deleteConfig(domain) {
+async function deleteConfig(key) {
   const all = await getAllConfigs();
-  delete all[domain];
+  delete all[key];
   await chrome.storage.local.set({ siteConfigs: all });
+}
+
+// ─── Login steps helpers ──────────────────────────────────────────────────────
+
+/**
+ * Convert loginSteps array to multi-line text.
+ * Format per line: urlPattern | action  (| linkText for clickLink)
+ */
+function stepsToText(steps) {
+  if (!steps || steps.length === 0) return '';
+  return steps.map(s => {
+    const parts = [s.urlPattern, s.action];
+    if (s.linkText) parts.push(s.linkText);
+    return parts.join(' | ');
+  }).join('\n');
+}
+
+/**
+ * Parse multi-line text into loginSteps array.
+ */
+function textToSteps(text) {
+  return text.split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const parts = line.split('|').map(p => p.trim());
+      const step = { urlPattern: parts[0], action: parts[1] };
+      if (parts[2]) step.linkText = parts[2];
+      return step;
+    })
+    .filter(s => s.urlPattern && s.action);
 }
 
 function showToast(msg, type = '') {
@@ -121,26 +178,33 @@ async function init() {
   currentDomain = tab?.url ? extractDomain(tab.url) : null;
 
   const urlEl = document.getElementById('current-url');
+  const keyInput = document.getElementById('config-key');
   const dot = document.getElementById('status-dot');
 
   if (currentDomain) {
     urlEl.textContent = currentDomain;
     const configs = await getAllConfigs();
-    const cfg = configs[currentDomain];
+    // Find exact or wildcard match for the current domain
+    const matchedKey = findMatchingConfigKey(configs, currentDomain);
+    const cfg = matchedKey ? configs[matchedKey] : null;
+
+    // Populate the editable key field (matched wildcard key, or current domain as default)
+    keyInput.value = matchedKey || currentDomain;
+
     if (cfg) {
       // Populate form
       document.getElementById('username').value = cfg.username || '';
       document.getElementById('password').value = cfg.password || '';
       document.getElementById('totp-secret').value = cfg.totpSecret || '';
-      document.getElementById('login-patterns').value = (cfg.loginUrlPatterns || []).join(', ');
-      document.getElementById('enabled-toggle').checked = !!cfg.enabled;
       document.getElementById('username-sel').value = cfg.usernameSelector || '';
       document.getElementById('password-sel').value = cfg.passwordSelector || '';
       document.getElementById('totp-sel').value = cfg.totpSelector || '';
-      if (cfg.enabled) { dot.classList.add('enabled'); }
+      document.getElementById('login-steps').value = stepsToText(cfg.loginSteps);
+      dot.classList.add('enabled');
     }
   } else {
     urlEl.textContent = 'No active tab';
+    keyInput.value = '';
   }
 }
 
@@ -149,17 +213,14 @@ init();
 // ─── Save ─────────────────────────────────────────────────────────────────────
 
 document.getElementById('btn-save').addEventListener('click', async () => {
-  if (!currentDomain) { showToast('No active tab', 'error'); return; }
-
-  const patternsRaw = document.getElementById('login-patterns').value;
-  const patterns = patternsRaw.split(',').map(p => p.trim()).filter(Boolean);
+  const configKey = document.getElementById('config-key').value.trim();
+  if (!configKey) { showToast('No config key', 'error'); return; }
 
   const config = {
     username: document.getElementById('username').value.trim(),
     password: document.getElementById('password').value,
     totpSecret: document.getElementById('totp-secret').value.trim(),
-    loginUrlPatterns: patterns,
-    enabled: document.getElementById('enabled-toggle').checked,
+    loginSteps: textToSteps(document.getElementById('login-steps').value),
     usernameSelector: document.getElementById('username-sel').value.trim(),
     passwordSelector: document.getElementById('password-sel').value.trim(),
     totpSelector: document.getElementById('totp-sel').value.trim(),
@@ -170,21 +231,21 @@ document.getElementById('btn-save').addEventListener('click', async () => {
     return;
   }
 
-  await saveConfig(currentDomain, config);
-  document.getElementById('status-dot').classList.toggle('enabled', config.enabled);
+  await saveConfig(configKey, config);
+  document.getElementById('status-dot').classList.add('enabled');
   showToast('Saved ✓', 'success');
 });
 
 // ─── Clear ────────────────────────────────────────────────────────────────────
 
 document.getElementById('btn-clear').addEventListener('click', async () => {
-  if (!currentDomain) return;
-  if (!confirm(`Clear config for ${currentDomain}?`)) return;
-  await deleteConfig(currentDomain);
-  ['username','password','totp-secret','login-patterns','username-sel','password-sel','totp-sel']
+  const configKey = document.getElementById('config-key').value.trim() || currentDomain;
+  if (!configKey) return;
+  if (!confirm(`Clear config for ${configKey}?`)) return;
+  await deleteConfig(configKey);
+  ['username','password','totp-secret','login-steps','username-sel','password-sel','totp-sel']
     .forEach(id => { document.getElementById(id).value = ''; });
-  document.getElementById('enabled-toggle').checked = false;
-  document.getElementById('status-dot').classList.remove('enabled');
+  document.getElementById('status-dot').className = 'tab-dot';
   showToast('Cleared', '');
 });
 
@@ -193,13 +254,11 @@ document.getElementById('btn-clear').addEventListener('click', async () => {
 document.getElementById('btn-login-now').addEventListener('click', async () => {
   if (!currentTab) { showToast('No active tab', 'error'); return; }
 
-  const patternsRaw = document.getElementById('login-patterns').value;
   const config = {
     username: document.getElementById('username').value.trim(),
     password: document.getElementById('password').value,
     totpSecret: document.getElementById('totp-secret').value.trim(),
-    loginUrlPatterns: patternsRaw.split(',').map(p => p.trim()).filter(Boolean),
-    enabled: document.getElementById('enabled-toggle').checked,
+    loginSteps: textToSteps(document.getElementById('login-steps').value),
     usernameSelector: document.getElementById('username-sel').value.trim(),
     passwordSelector: document.getElementById('password-sel').value.trim(),
     totpSelector: document.getElementById('totp-sel').value.trim(),
@@ -217,6 +276,7 @@ document.getElementById('btn-login-now').addEventListener('click', async () => {
   const response = await chrome.runtime.sendMessage({
     action: 'triggerLogin',
     tabId: currentTab.id,
+    tabUrl: currentTab.url,
     config
   });
 
@@ -303,18 +363,12 @@ async function renderSitesList() {
     const cfg = configs[domain];
     return `
       <div class="site-item">
-        <div class="site-dot ${cfg.enabled ? 'on' : ''}"></div>
+        <div class="site-dot on"></div>
         <div class="site-info">
           <div class="site-domain">${domain}</div>
           <div class="site-user">${cfg.username || '—'} ${cfg.totpSecret ? '· TOTP ✓' : ''}</div>
         </div>
         <div class="site-actions">
-          <button class="icon-btn" title="Toggle" data-action="toggle" data-domain="${domain}">
-            ${cfg.enabled
-              ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 9l-6 6 6 6"/><path d="M20 4v7a4 4 0 01-4 4H4"/></svg>`
-              : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`
-            }
-          </button>
           <button class="icon-btn del" title="Delete" data-action="delete" data-domain="${domain}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
@@ -334,10 +388,6 @@ async function renderSitesList() {
       if (action === 'delete') {
         if (!confirm(`Delete config for ${domain}?`)) return;
         await deleteConfig(domain);
-        renderSitesList();
-      } else if (action === 'toggle') {
-        configs[domain].enabled = !configs[domain].enabled;
-        await chrome.storage.local.set({ siteConfigs: configs });
         renderSitesList();
       }
     });
